@@ -7,6 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/yebrai/go-tasks-microservice/internal/task"
 	"github.com/yebrai/go-tasks-microservice/internal/task/creator"
 	taskmongo "github.com/yebrai/go-tasks-microservice/internal/task/mongo"
 	"github.com/yebrai/go-tasks-microservice/pkg/cqrs"
