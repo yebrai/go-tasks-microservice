@@ -8,7 +8,7 @@ test:
 	go test ./...
 
 run:
-	go run (MAIN_PATH)
+	go run $(MAIN_PATH)
 
 fmt:
 	go fmt ./...
