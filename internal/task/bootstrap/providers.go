@@ -10,7 +10,6 @@ import (
 	"github.com/yebrai/go-tasks-microservice/pkg/cqrs/inmem"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	// Cambiar imports
 	"github.com/yebrai/go-tasks-microservice/pkg/events"
 	"github.com/yebrai/go-tasks-microservice/pkg/id"
 	"github.com/yebrai/go-tasks-microservice/pkg/rabbitmq"
