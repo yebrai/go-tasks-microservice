@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/segmentio/kafka-go"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -13,21 +14,30 @@ import (
 	"github.com/yebrai/go-tasks-microservice/pkg/cqrs"
 	"github.com/yebrai/go-tasks-microservice/pkg/cqrs/inmem"
 	"github.com/yebrai/go-tasks-microservice/pkg/id"
+
+	"github.com/yebrai/go-tasks-microservice/pkg/events"
+	kafkapkg "github.com/yebrai/go-tasks-microservice/pkg/kafka"
 )
 
 // Providers contiene todas las dependencias inyectadas del microservicio
 type Providers struct {
-	// Infrastructure layer
+	// INFRAESTRUCTURA BASE
 	MongoClient *mongo.Client
 	IDGenerator id.Generator
 
-	// Domain layer - Repositories
+	// INFRAESTRUCTURA KAFKA (NUEVO)
+	KafkaWriter *kafka.Writer
+
+	// REPOSITORIOS (DOMAIN LAYER)
 	TaskRepository task.Repository
 
-	// Application layer - CQRS
+	// CQRS (APPLICATION LAYER)
 	CommandBus cqrs.CommandBus
 
-	// Application layer - Command Handlers
+	// EVENT SYSTEM (APPLICATION LAYER) - NUEVO
+	EventBus events.EventBus
+
+	// COMMAND HANDLERS (APPLICATION LAYER)
 	CreateTaskHandler *creator.CreateTaskCommandHandler
 }
 
@@ -35,22 +45,29 @@ type Providers struct {
 func NewProviders(ctx context.Context, config *Config) (*Providers, error) {
 	providers := &Providers{}
 
-	// 1. Inicializar infraestructura base
+	// INICIALIZACIÓN EN CAPAS (Bottom-Up)
+
+	// 1. Infraestructura base (MongoDB, ID Generator)
 	if err := providers.initInfrastructure(ctx, config); err != nil {
 		return nil, fmt.Errorf("infrastructure initialization failed: %w", err)
 	}
 
-	// 2. Inicializar capa de persistencia
+	// 2. Repositorios (Domain → Infrastructure adapters)
 	if err := providers.initRepositories(config); err != nil {
 		return nil, fmt.Errorf("repository initialization failed: %w", err)
 	}
 
-	// 3. Inicializar CQRS buses
+	// 3. CQRS buses
 	if err := providers.initCQRS(); err != nil {
 		return nil, fmt.Errorf("CQRS initialization failed: %w", err)
 	}
 
-	// 4. Inicializar y registrar command handlers
+	// 4. Event system
+	if err := providers.initEventSystem(config); err != nil {
+		return nil, fmt.Errorf("event system initialization failed: %w", err)
+	}
+
+	// 5. Command handlers
 	if err := providers.initCommandHandlers(); err != nil {
 		return nil, fmt.Errorf("command handlers initialization failed: %w", err)
 	}
@@ -58,7 +75,7 @@ func NewProviders(ctx context.Context, config *Config) (*Providers, error) {
 	return providers, nil
 }
 
-// initInfrastructure inicializa la infraestructura base (MongoDB, generadores, etc.)
+// FASE 1: INFRAESTRUCTURA BASE
 func (p *Providers) initInfrastructure(ctx context.Context, config *Config) error {
 	// Conexión a MongoDB con configuración robusta
 	clientOptions := options.Client().
@@ -88,7 +105,7 @@ func (p *Providers) initInfrastructure(ctx context.Context, config *Config) erro
 	return nil
 }
 
-// initRepositories inicializa todos los repositorios de persistencia
+// FASE 2: REPOSITORIOS
 func (p *Providers) initRepositories(config *Config) error {
 	database := p.MongoClient.Database(config.Mongo.Database)
 
@@ -101,9 +118,8 @@ func (p *Providers) initRepositories(config *Config) error {
 	return nil
 }
 
-// initCQRS inicializa los buses de comandos y consultas
+// FASE 3: CQRS BUSES
 func (p *Providers) initCQRS() error {
-	// Command Bus en memoria (escalable a Redis/RabbitMQ después)
 	p.CommandBus = inmem.NewCommandBus()
 
 	fmt.Printf("✅ CQRS buses initialized\n")
@@ -112,12 +128,49 @@ func (p *Providers) initCQRS() error {
 	return nil
 }
 
-// initCommandHandlers inicializa y registra todos los command handlers
+// FASE 4: EVENT SYSTEM
+func (p *Providers) initEventSystem(config *Config) error {
+	if !config.Kafka.Enabled {
+		// KAFKA DESHABILITADO - usar NoOp EventBus
+		p.EventBus = events.NewNoOpEventBus()
+		fmt.Printf("⚠️  Kafka disabled - using NoOp EventBus\n")
+		return nil
+	}
+
+	// KAFKA HABILITADO - crear cliente real
+	kafkaConfig := kafkapkg.ClientConfig{
+		Brokers:     config.Kafka.Brokers,
+		Topic:       config.Kafka.Topic,
+		Partitions:  config.Kafka.Partitions,
+		Replication: config.Kafka.Replication,
+		Security: kafkapkg.SecurityConfig{
+			Protocol: config.Kafka.Security.Protocol,
+			Username: config.Kafka.Security.Username,
+			Password: config.Kafka.Security.Password,
+		},
+	}
+
+	// Crear y almacenar Kafka Writer (para cleanup)
+	p.KafkaWriter = kafkapkg.NewWriter(kafkaConfig)
+
+	// Crear EventBus usando el writer
+	p.EventBus = events.NewKafkaEventBus(p.KafkaWriter)
+
+	fmt.Printf("✅ Kafka EventBus initialized\n")
+	fmt.Printf("   - Brokers: %v\n", config.Kafka.Brokers)
+	fmt.Printf("   - Topic: %s\n", config.Kafka.Topic)
+	fmt.Printf("   - Security: %s\n", config.Kafka.Security.Protocol)
+
+	return nil
+}
+
+// FASE 5: COMMAND HANDLERS
 func (p *Providers) initCommandHandlers() error {
-	// Handler para crear tareas
+	// Handler para crear tareas CON EventBus inyectado
 	p.CreateTaskHandler = creator.NewCreateTaskCommandHandler(
 		p.TaskRepository,
 		p.IDGenerator,
+		p.EventBus,
 	)
 
 	// Registrar handlers en el command bus
@@ -126,12 +179,12 @@ func (p *Providers) initCommandHandlers() error {
 	}
 
 	fmt.Printf("✅ Command handlers registered\n")
-	fmt.Printf("   - CreateTaskCommand: ✓\n")
+	fmt.Printf("   - CreateTaskCommand: ✓ (with EventBus)\n")
 
 	return nil
 }
 
-// Cleanup limpia todos los recursos y conexiones
+// CLEANUP
 func (p *Providers) Cleanup() error {
 	var errors []error
 
@@ -141,6 +194,22 @@ func (p *Providers) Cleanup() error {
 			errors = append(errors, fmt.Errorf("MongoDB disconnect error: %w", err))
 		} else {
 			fmt.Printf("✅ MongoDB connection closed\n")
+		}
+	}
+
+	// Cerrar Kafka Writer
+	if p.KafkaWriter != nil {
+		if err := p.KafkaWriter.Close(); err != nil {
+			errors = append(errors, fmt.Errorf("Kafka writer close error: %w", err))
+		} else {
+			fmt.Printf("✅ Kafka writer closed\n")
+		}
+	}
+
+	// EventBus cleanup (principalmente para NoOp)
+	if p.EventBus != nil {
+		if err := p.EventBus.Close(); err != nil {
+			errors = append(errors, fmt.Errorf("EventBus close error: %w", err))
 		}
 	}
 

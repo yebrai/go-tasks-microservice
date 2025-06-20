@@ -6,12 +6,12 @@ mongo:
   database: "taskdb"
 
 kafka:
-  enabled: false  # Deshabilitado por defecto para desarrollo local
-  brokers: ["localhost:9092"]
+  enabled: true
+  brokers: ["UPSTASH_ENDPOINT"]
   topic: "task-events"
   partitions: 3
   replication: 1
   security:
-    protocol: "PLAINTEXT"
-    username: ""
-    password: ""
+    protocol: "SASL_SSL"
+    username: "UPSTASH_USERNAME"
+    password: "UPSTASH_PASSWORD"
