@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # MongoDB
   mongo:
     container_name: mongo
     image: mongo:6.0.3
@@ -12,5 +13,35 @@ services:
     volumes:
       - mongo-data:/data/db
 
+  # RabbitMQ
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management  # Incluye Management UI
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  # Tu aplicación
+  taskservice:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongo
+      - rabbitmq
+    environment:
+      - TASK_SERVER_ADDRESS=:8080
+      - TASK_MONGO_URI=mongodb://mongoroot:secret@mongo:27017/taskdb?authSource=admin
+      - TASK_RABBITMQ_ENABLED=true
+      - TASK_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - TASK_RABBITMQ_EXCHANGE=task-events
+      - TASK_RABBITMQ_QUEUE=task-events-queue
+
 volumes:
   mongo-data:
+  rabbitmq-data:
