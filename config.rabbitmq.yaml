@@ -6,7 +6,7 @@ mongo:
   database: "taskdb"
 
 rabbitmq:
-  enabled: true  # false -> noOp
+  enabled: true
   url: "amqp://guest:guest@localhost:5672/"
   exchange: "task-events"
   queue: "task-events-queue"

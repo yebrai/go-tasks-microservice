@@ -3,30 +3,27 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-
-	"github.com/segmentio/kafka-go"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-
 	"github.com/yebrai/go-tasks-microservice/internal/task"
 	"github.com/yebrai/go-tasks-microservice/internal/task/creator"
 	taskmongo "github.com/yebrai/go-tasks-microservice/internal/task/mongo"
 	"github.com/yebrai/go-tasks-microservice/pkg/cqrs"
 	"github.com/yebrai/go-tasks-microservice/pkg/cqrs/inmem"
-	"github.com/yebrai/go-tasks-microservice/pkg/id"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
+	// Cambiar imports
 	"github.com/yebrai/go-tasks-microservice/pkg/events"
-	kafkapkg "github.com/yebrai/go-tasks-microservice/pkg/kafka"
+	"github.com/yebrai/go-tasks-microservice/pkg/id"
+	"github.com/yebrai/go-tasks-microservice/pkg/rabbitmq"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// Providers contiene todas las dependencias inyectadas del microservicio
 type Providers struct {
 	// INFRAESTRUCTURA BASE
 	MongoClient *mongo.Client
 	IDGenerator id.Generator
 
-	// INFRAESTRUCTURA KAFKA (NUEVO)
-	KafkaWriter *kafka.Writer
+	// INFRAESTRUCTURA RabbitMQ
+	RabbitMQClient *rabbitmq.Client
 
 	// REPOSITORIOS (DOMAIN LAYER)
 	TaskRepository task.Repository
@@ -130,36 +127,34 @@ func (p *Providers) initCQRS() error {
 
 // FASE 4: EVENT SYSTEM
 func (p *Providers) initEventSystem(config *Config) error {
-	if !config.Kafka.Enabled {
-		// KAFKA DESHABILITADO - usar NoOp EventBus
+	if !config.RabbitMQ.Enabled {
+		// RABBITMQ DESHABILITADO - usar NoOp EventBus
 		p.EventBus = events.NewNoOpEventBus()
-		fmt.Printf("⚠️  Kafka disabled - using NoOp EventBus\n")
+		fmt.Printf("⚠️  RabbitMQ disabled - using NoOp EventBus\n")
 		return nil
 	}
 
-	// KAFKA HABILITADO - crear cliente real
-	kafkaConfig := kafkapkg.ClientConfig{
-		Brokers:     config.Kafka.Brokers,
-		Topic:       config.Kafka.Topic,
-		Partitions:  config.Kafka.Partitions,
-		Replication: config.Kafka.Replication,
-		Security: kafkapkg.SecurityConfig{
-			Protocol: config.Kafka.Security.Protocol,
-			Username: config.Kafka.Security.Username,
-			Password: config.Kafka.Security.Password,
-		},
+	// RABBITMQ HABILITADO - crear cliente real
+	rabbitConfig := rabbitmq.ClientConfig{
+		URL:      config.RabbitMQ.URL,
+		Exchange: config.RabbitMQ.Exchange,
+		Queue:    config.RabbitMQ.Queue,
 	}
 
-	// Crear y almacenar Kafka Writer (para cleanup)
-	p.KafkaWriter = kafkapkg.NewWriter(kafkaConfig)
+	// Crear y almacenar RabbitMQ Client
+	client, err := rabbitmq.NewClient(rabbitConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create RabbitMQ client: %w", err)
+	}
 
-	// Crear EventBus usando el writer
-	p.EventBus = events.NewKafkaEventBus(p.KafkaWriter)
+	p.RabbitMQClient = client
 
-	fmt.Printf("✅ Kafka EventBus initialized\n")
-	fmt.Printf("   - Brokers: %v\n", config.Kafka.Brokers)
-	fmt.Printf("   - Topic: %s\n", config.Kafka.Topic)
-	fmt.Printf("   - Security: %s\n", config.Kafka.Security.Protocol)
+	// Crear EventBus usando RabbitMQ
+	p.EventBus = events.NewRabbitMQEventBus(client)
+
+	fmt.Printf("✅ RabbitMQ EventBus initialized\n")
+	fmt.Printf("   - URL: %s\n", config.RabbitMQ.URL)
+	fmt.Printf("   - Exchange: %s\n", config.RabbitMQ.Exchange)
 
 	return nil
 }
@@ -197,12 +192,12 @@ func (p *Providers) Cleanup() error {
 		}
 	}
 
-	// Cerrar Kafka Writer
-	if p.KafkaWriter != nil {
-		if err := p.KafkaWriter.Close(); err != nil {
-			errors = append(errors, fmt.Errorf("Kafka writer close error: %w", err))
+	// Cleanup RabbitMQ Client
+	if p.RabbitMQClient != nil {
+		if err := p.RabbitMQClient.Close(); err != nil {
+			errors = append(errors, fmt.Errorf("RabbitMQ client close error: %w", err))
 		} else {
-			fmt.Printf("✅ Kafka writer closed\n")
+			fmt.Printf("✅ RabbitMQ client closed\n")
 		}
 	}
 

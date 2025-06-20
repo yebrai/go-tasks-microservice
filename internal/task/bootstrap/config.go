@@ -1,9 +1,9 @@
 package bootstrap
 
 type Config struct {
-	Server ServerConfig `mapstructure:"server"`
-	Mongo  MongoConfig  `mapstructure:"mongo"`
-	Kafka  KafkaConfig  `mapstructure:"kafka"`
+	Server   ServerConfig   `mapstructure:"server"`
+	Mongo    MongoConfig    `mapstructure:"mongo"`
+	RabbitMQ RabbitMQConfig `mapstructure:"rabbitmq"`
 }
 
 // ServerConfig configuración del servidor HTTP
@@ -17,17 +17,9 @@ type MongoConfig struct {
 	Database string `mapstructure:"database"`
 }
 
-type KafkaConfig struct {
-	Enabled     bool           `mapstructure:"enabled"`
-	Brokers     []string       `mapstructure:"brokers"`
-	Topic       string         `mapstructure:"topic"`
-	Security    SecurityConfig `mapstructure:"security"`
-	Partitions  int            `mapstructure:"partitions"`
-	Replication int            `mapstructure:"replication"`
-}
-
-type SecurityConfig struct {
-	Protocol string `mapstructure:"protocol"` // PLAINTEXT, SASL_SSL
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
+type RabbitMQConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	URL      string `mapstructure:"url"`
+	Exchange string `mapstructure:"exchange"`
+	Queue    string `mapstructure:"queue"`
 }
