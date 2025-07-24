@@ -94,13 +94,14 @@
       <h3>🔍 Event Stream Monitor</h3>
       <div class="monitor-info">
         <p>
-          This panel shows real-time events from your Go microservice.
-          Events are published through RabbitMQ when tasks are created, updated, or completed.
+          <strong>⚠️ Development Mode:</strong> This panel shows events from your task interactions.
+          In production, events would be streamed from RabbitMQ through WebSocket/SSE endpoints.
         </p>
         <div class="monitor-details">
-          <div><strong>Exchange:</strong> task-events</div>
-          <div><strong>Queue:</strong> task-events-queue</div>
-          <div><strong>Routing Keys:</strong> task.created, task.updated, task.completed</div>
+          <div><strong>Current Mode:</strong> localStorage simulation</div>
+          <div><strong>Backend Events:</strong> Published to RabbitMQ exchange</div>
+          <div><strong>Event Types:</strong> task.created, task.updated, task.completed</div>
+          <div><strong>Note:</strong> Backend WebSocket/SSE endpoints needed for real-time streaming</div>
         </div>
       </div>
     </div>
@@ -140,43 +141,42 @@ export default {
       return max > 0 ? (count / max) * 100 : 0
     }
 
-    // Simulate WebSocket connection for demo purposes
+    // Load real events from localStorage (temporary solution until backend provides event endpoints)
+    const loadEventsFromStorage = () => {
+      const storedEvents = localStorage.getItem('taskEvents')
+      if (storedEvents) {
+        try {
+          const parsed = JSON.parse(storedEvents)
+          events.value = parsed || []
+        } catch (error) {
+          console.error('Error loading events from storage:', error)
+          events.value = []
+        }
+      }
+    }
+
     const connectToEventStream = () => {
-      // In a real implementation, this would connect to a WebSocket endpoint
-      // that streams RabbitMQ events
+      console.log('⚠️  Backend WebSocket/SSE endpoints not implemented yet. Showing events from localStorage.')
       connected.value = true
-      
-      // Simulate events for demo
-      const simulateEvents = () => {
+      loadEventsFromStorage()
+
+      // Set up storage listener to detect new events
+      const handleStorageChange = (e) => {
+        if (e.key === 'taskEvents') {
+          loadEventsFromStorage()
+        }
+      }
+
+      window.addEventListener('storage', handleStorageChange)
+
+      // Check for updates every few seconds
+      const checkForUpdates = () => {
         if (!connected.value) return
-        
-        const eventTypes = ['task.created', 'task.updated', 'task.completed']
-        const randomType = eventTypes[Math.floor(Math.random() * eventTypes.length)]
-        
-        const event = {
-          id: eventIdCounter++,
-          type: randomType,
-          timestamp: new Date(),
-          aggregateId: `task-${Math.random().toString(36).slice(2, 11)}`,
-          payload: {
-            title: `Sample Task ${eventIdCounter}`,
-            status: randomType.includes('completed') ? 'completed' : 'pending',
-            timestamp: new Date().toISOString()
-          }
-        }
-        
-        events.value.push(event)
-        
-        // Keep only last 50 events
-        if (events.value.length > 50) {
-          events.value = events.value.slice(-50)
-        }
-        
-        // Schedule next event
-        setTimeout(simulateEvents, Math.random() * 5000 + 2000)
+        loadEventsFromStorage()
+        setTimeout(checkForUpdates, 3000)
       }
       
-      setTimeout(simulateEvents, 1000)
+      setTimeout(checkForUpdates, 1000)
     }
 
     const disconnectFromEventStream = () => {
@@ -197,6 +197,8 @@ export default {
 
     const clearEvents = () => {
       events.value = []
+      localStorage.removeItem('taskEvents')
+      console.log('🗑️ Events cleared from localStorage')
     }
 
     const formatTime = (date) => {

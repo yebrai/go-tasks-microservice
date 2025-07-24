@@ -170,16 +170,14 @@ export default {
 
     const completeTask = async (taskId) => {
       loading.value = true
+      error.value = ''
       try {
-        try {
-          await taskService.updateTask(taskId, { status: 'completed' })
-          await loadTasks()
-        } catch (err) {
-          error.value = 'Failed to complete task: ' + err.message
-          console.error('Failed to complete task:', err)
-        }
+        await taskService.updateTask(taskId, { status: 'completed' })
+        // Reload tasks to reflect the change
+        await loadTasks()
       } catch (err) {
         error.value = 'Failed to complete task: ' + err.message
+        console.error('Failed to complete task:', err)
       } finally {
         loading.value = false
       }
