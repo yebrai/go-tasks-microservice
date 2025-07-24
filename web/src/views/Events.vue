@@ -157,7 +157,7 @@ export default {
           id: eventIdCounter++,
           type: randomType,
           timestamp: new Date(),
-          aggregateId: `task-${Math.random().toString(36).substr(2, 9)}`,
+          aggregateId: `task-${Math.random().toString(36).slice(2, 11)}`,
           payload: {
             title: `Sample Task ${eventIdCounter}`,
             status: randomType.includes('completed') ? 'completed' : 'pending',
