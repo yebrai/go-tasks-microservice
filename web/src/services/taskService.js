@@ -27,41 +27,44 @@ export const taskService = {
       return response.data || []
     } catch (error) {
       console.error('Failed to fetch tasks:', error)
-      // Return mock data for demo purposes when API is not available
-      return [
-        {
-          id: '1',
-          title: 'Setup development environment',
-          description: 'Configure Go, Docker, and local development tools',
-          status: 'completed',
-          created_at: '2024-01-15T10:00:00Z',
-          due_date: '2024-01-20'
-        },
-        {
-          id: '2',
-          title: 'Implement task creation API',
-          description: 'Create REST endpoint for task creation with validation',
-          status: 'in-progress',
-          created_at: '2024-01-16T14:30:00Z',
-          due_date: '2024-01-25'
-        },
-        {
-          id: '3',
-          title: 'Add RabbitMQ integration',
-          description: 'Integrate event publishing for task lifecycle events',
-          status: 'pending',
-          created_at: '2024-01-17T09:15:00Z',
-          due_date: '2024-01-30'
-        },
-        {
-          id: '4',
-          title: 'Deploy to GCP',
-          description: 'Setup Cloud Run deployment with proper configuration',
-          status: 'pending',
-          created_at: '2024-01-18T11:45:00Z',
-          due_date: '2024-02-05'
-        }
-      ]
+      if (USE_MOCK_DATA) {
+        // Return mock data for demo purposes when API is not available
+        return [
+          {
+            id: '1',
+            title: 'Setup development environment',
+            description: 'Configure Go, Docker, and local development tools',
+            status: 'completed',
+            created_at: '2024-01-15T10:00:00Z',
+            due_date: '2024-01-20'
+          },
+          {
+            id: '2',
+            title: 'Implement task creation API',
+            description: 'Create REST endpoint for task creation with validation',
+            status: 'in-progress',
+            created_at: '2024-01-16T14:30:00Z',
+            due_date: '2024-01-25'
+          },
+          {
+            id: '3',
+            title: 'Add RabbitMQ integration',
+            description: 'Integrate event publishing for task lifecycle events',
+            status: 'pending',
+            created_at: '2024-01-17T09:15:00Z',
+            due_date: '2024-01-30'
+          },
+          {
+            id: '4',
+            title: 'Deploy to GCP',
+            description: 'Setup Cloud Run deployment with proper configuration',
+            status: 'pending',
+            created_at: '2024-01-18T11:45:00Z',
+            due_date: '2024-02-05'
+          }
+        ];
+      }
+      return [];
     }
   },
 
