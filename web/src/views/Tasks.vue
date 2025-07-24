@@ -171,10 +171,13 @@ export default {
     const completeTask = async (taskId) => {
       loading.value = true
       try {
-        // This would be implemented when you add update functionality
-        console.log('Complete task:', taskId)
-        // await taskService.updateTask(taskId, { status: 'completed' })
-        // await loadTasks()
+        try {
+          await taskService.updateTask(taskId, { status: 'completed' })
+          await loadTasks()
+        } catch (err) {
+          error.value = 'Failed to complete task: ' + err.message
+          console.error('Failed to complete task:', err)
+        }
       } catch (err) {
         error.value = 'Failed to complete task: ' + err.message
       } finally {
