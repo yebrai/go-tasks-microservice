@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+gcp-setup.md
+*.md
+
+# Development files
+.env*
+docker-compose*.yml
+
+# Node modules and build files
+web/node_modules
+web/dist
+web/.vscode
+
+# Go build files
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.html
+coverage.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

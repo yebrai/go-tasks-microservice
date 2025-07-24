@@ -1,0 +1,129 @@
+# Cloud Build configuration for deploying to GCP
+steps:
+  # Step 1: Build backend Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-backend'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.backend'
+      - '-t'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-backend:${BUILD_ID}'
+      - '-t'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-backend:latest'
+      - '.'
+
+  # Step 2: Build frontend Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-frontend'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.frontend'
+      - '-t'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-frontend:${BUILD_ID}'
+      - '-t'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-frontend:latest'
+      - '.'
+
+  # Step 3: Push backend image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-backend'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-backend'
+    dependsOn: ['build-backend']
+
+  # Step 4: Push frontend image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-frontend'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-frontend'
+    dependsOn: ['build-frontend']
+
+  # Step 5: Deploy backend to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'deploy-backend'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME_BACKEND}'
+      - '--image=${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-backend:${BUILD_ID}'
+      - '--region=${_LOCATION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--min-instances=0'
+      - '--max-instances=10'
+      - '--port=8080'
+      - '--set-env-vars=TASK_SERVER_ADDRESS=:8080'
+      - '--set-env-vars=TASK_MONGO_URI=${_MONGO_URI}'
+      - '--set-env-vars=TASK_RABBITMQ_ENABLED=${_RABBITMQ_ENABLED}'
+      - '--set-env-vars=TASK_RABBITMQ_URL=${_RABBITMQ_URL}'
+      - '--set-env-vars=TASK_RABBITMQ_EXCHANGE=${_RABBITMQ_EXCHANGE}'
+      - '--set-env-vars=TASK_RABBITMQ_QUEUE=${_RABBITMQ_QUEUE}'
+    dependsOn: ['push-backend']
+
+  # Step 6: Deploy frontend to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'deploy-frontend'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME_FRONTEND}'
+      - '--image=${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/taskservice-frontend:${BUILD_ID}'
+      - '--region=${_LOCATION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=256Mi'
+      - '--cpu=1'
+      - '--min-instances=0'
+      - '--max-instances=5'
+      - '--port=3000'
+    dependsOn: ['push-frontend', 'deploy-backend']
+
+  # Step 7: Get backend service URL and update frontend environment
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'update-frontend-config'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Get backend service URL
+        BACKEND_URL=$(gcloud run services describe ${_SERVICE_NAME_BACKEND} --region=${_LOCATION} --format='value(status.url)')
+        
+        # Update frontend service with backend URL
+        gcloud run services update ${_SERVICE_NAME_FRONTEND} \
+          --region=${_LOCATION} \
+          --set-env-vars=BACKEND_URL=$${BACKEND_URL}
+    dependsOn: ['deploy-frontend']
+
+# Configuration options
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+# Substitution variables (can be overridden)
+substitutions:
+  _LOCATION: 'us-central1'
+  _REPOSITORY: 'taskservice-repo'
+  _SERVICE_NAME_BACKEND: 'taskservice-backend'
+  _SERVICE_NAME_FRONTEND: 'taskservice-frontend'
+  _MONGO_URI: 'mongodb+srv://user:password@cluster.mongodb.net/taskdb'
+  _RABBITMQ_ENABLED: 'false'  # Disable RabbitMQ for Cloud Run, use Pub/Sub instead
+  _RABBITMQ_URL: ''
+  _RABBITMQ_EXCHANGE: 'task-events'
+  _RABBITMQ_QUEUE: 'task-events-queue'
+
+# Timeout
+timeout: '1200s'
+
+# Tags for this build
+tags:
+  - 'taskservice'
+  - 'microservice'
+  - 'cloud-run'
