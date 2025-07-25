@@ -95,14 +95,14 @@ export default {
 
     const loadStats = async () => {
       try {
-        // Simulated stats - replace with real API calls
+        const taskStats = await taskService.getTaskStats()
         stats.value = {
-          totalTasks: 12,
-          completedTasks: 8,
-          pendingTasks: 4
+          totalTasks: taskStats.total,
+          completedTasks: taskStats.completed,
+          pendingTasks: taskStats.pending
         }
         
-        // Simulated recent events
+        // For now, keep simulated events - can be improved with real events API
         recentEvents.value = [
           { id: 1, timestamp: new Date(), description: 'Task "Fix login bug" completed' },
           { id: 2, timestamp: new Date(Date.now() - 300000), description: 'New task created: "Update documentation"' },
@@ -110,6 +110,12 @@ export default {
         ]
       } catch (error) {
         console.error('Failed to load stats:', error)
+        // Fallback to empty stats
+        stats.value = {
+          totalTasks: 0,
+          completedTasks: 0,
+          pendingTasks: 0
+        }
       }
     }
 

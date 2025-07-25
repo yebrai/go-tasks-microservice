@@ -60,3 +60,58 @@ func (h *CreateTaskCommandHandler) Handle(ctx context.Context, cmd cqrs.Command)
 
 	return nil
 }
+
+// CompleteTaskCommandHandler maneja el comando para completar tareas
+type CompleteTaskCommandHandler struct {
+	repository task.Repository
+	eventBus   events.EventBus
+}
+
+// NewCompleteTaskCommandHandler crea una nueva instancia del handler
+func NewCompleteTaskCommandHandler(
+	repository task.Repository,
+	eventBus events.EventBus,
+) *CompleteTaskCommandHandler {
+	return &CompleteTaskCommandHandler{
+		repository: repository,
+		eventBus:   eventBus,
+	}
+}
+
+// Handle maneja el comando CompleteTaskCommand
+func (h *CompleteTaskCommandHandler) Handle(ctx context.Context, cmd cqrs.Command) error {
+	completeCmd, ok := cmd.(CompleteTaskCommand)
+	if !ok {
+		return fmt.Errorf("invalid command type: expected CompleteTaskCommand")
+	}
+
+	// 1. Crear TaskID desde string
+	taskID, err := task.NewID(completeCmd.ID)
+	if err != nil {
+		return fmt.Errorf("invalid task ID: %w", err)
+	}
+
+	// 2. Obtener la tarea
+	existingTask, err := h.repository.FindByID(ctx, string(taskID))
+	if err != nil {
+		return fmt.Errorf("task not found: %w", err)
+	}
+
+	// 3. Completar la tarea (lógica de dominio)
+	if err := existingTask.Complete(); err != nil {
+		return fmt.Errorf("failed to complete task: %w", err)
+	}
+
+	// 4. Actualizar en el repositorio
+	if err := h.repository.Update(ctx, existingTask); err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
+
+	// 5. Publicar evento
+	event := task.NewTaskCompletedEvent(existingTask)
+	if err := h.eventBus.Publish(ctx, event); err != nil {
+		fmt.Printf("⚠️  Failed to publish task completed event: %v\n", err)
+	}
+
+	return nil
+}

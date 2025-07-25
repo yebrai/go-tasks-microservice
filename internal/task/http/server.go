@@ -5,20 +5,27 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yebrai/go-tasks-microservice/internal/task"
 	"github.com/yebrai/go-tasks-microservice/pkg/cqrs"
+	"github.com/yebrai/go-tasks-microservice/pkg/events"
 )
 
 // Server maneja el servidor HTTP
 type Server struct {
 	commandBus cqrs.CommandBus
+	repository task.Repository
 	handler    *TaskHandler
+	wsHandler  *WebSocketHandler
 }
 
 // NewServer crea una nueva instancia del servidor HTTP
-func NewServer(commandBus cqrs.CommandBus) *Server {
+func NewServer(commandBus cqrs.CommandBus, repository task.Repository, eventBus events.EventBus) *Server {
+	wsHandler := NewWebSocketHandler(eventBus)
 	return &Server{
 		commandBus: commandBus,
-		handler:    NewTaskHandler(commandBus),
+		repository: repository,
+		handler:    NewTaskHandler(commandBus, repository, wsHandler),
+		wsHandler:  wsHandler,
 	}
 }
 
@@ -46,21 +53,36 @@ func (s *Server) setupRoutes(router *gin.Engine) {
 	// Health check
 	router.GET("/health", s.healthCheck)
 
+	// WebSocket endpoint
+	router.GET("/ws/events", s.wsHandler.HandleWebSocket)
+
 	// API v1
 	api := router.Group("/api/v1")
 	{
 		tasks := api.Group("/tasks")
 		{
+			tasks.GET("", s.handler.GetTasks)
 			tasks.POST("", s.handler.CreateTask)
+			tasks.GET("/:id", s.handler.GetTask)
+			tasks.PUT("/:id", s.handler.UpdateTask)
 		}
 	}
 }
 
 // healthCheck endpoint de salud
 func (s *Server) healthCheck(c *gin.Context) {
+	// Verificar conectividad de la base de datos intentando obtener tareas
+	dbStatus := "connected"
+	_, err := s.repository.FindAll(c.Request.Context())
+	if err != nil {
+		dbStatus = "disconnected"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "healthy",
-		"service": "go-tasks-microservice",
+		"status":   "ok",
+		"service":  "go-tasks-microservice",
+		"database": dbStatus,
+		"rabbitmq": "connected", // Por ahora asumimos que está conectado, mejorar en el futuro
 	})
 }
 

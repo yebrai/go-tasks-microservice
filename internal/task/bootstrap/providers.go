@@ -34,7 +34,8 @@ type Providers struct {
 	EventBus events.EventBus
 
 	// COMMAND HANDLERS (APPLICATION LAYER)
-	CreateTaskHandler *creator.CreateTaskCommandHandler
+	CreateTaskHandler   *creator.CreateTaskCommandHandler
+	CompleteTaskHandler *creator.CompleteTaskCommandHandler
 }
 
 // NewProviders crea e inicializa todas las dependencias del sistema
@@ -167,13 +168,24 @@ func (p *Providers) initCommandHandlers() error {
 		p.EventBus,
 	)
 
+	// Handler para completar tareas CON EventBus inyectado
+	p.CompleteTaskHandler = creator.NewCompleteTaskCommandHandler(
+		p.TaskRepository,
+		p.EventBus,
+	)
+
 	// Registrar handlers en el command bus
 	if err := p.CommandBus.Register(creator.CreateTaskCommandType, p.CreateTaskHandler); err != nil {
 		return fmt.Errorf("failed to register CreateTaskCommandHandler: %w", err)
 	}
 
+	if err := p.CommandBus.Register(creator.CompleteTaskCommandType, p.CompleteTaskHandler); err != nil {
+		return fmt.Errorf("failed to register CompleteTaskCommandHandler: %w", err)
+	}
+
 	fmt.Printf("✅ Command handlers registered\n")
 	fmt.Printf("   - CreateTaskCommand: ✓ (with EventBus)\n")
+	fmt.Printf("   - CompleteTaskCommand: ✓ (with EventBus)\n")
 
 	return nil
 }

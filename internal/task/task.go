@@ -25,12 +25,12 @@ var (
 
 // Task es la entidad principal del dominio
 type Task struct {
-	ID          string
-	Title       string
-	Description string
-	Status      Status
-	CreatedAt   time.Time
-	DueDate     *time.Time
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	Status      Status     `json:"status"`
+	CreatedAt   time.Time  `json:"created_at"`
+	DueDate     *time.Time `json:"due_date,omitempty"`
 }
 
 // NewTask Constructor para nuevas tareas
