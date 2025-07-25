@@ -20,6 +20,9 @@
           <button @click="clearEvents" class="btn btn-secondary">
             Clear Events
           </button>
+          <button @click="forceReconnect" class="btn btn-warning">
+            Force Reconnect
+          </button>
         </div>
         
         <div class="events-list">
@@ -94,14 +97,14 @@
       <h3>🔍 Event Stream Monitor</h3>
       <div class="monitor-info">
         <p>
-          <strong>⚠️ Development Mode:</strong> This panel shows events from your task interactions.
-          In production, events would be streamed from RabbitMQ through WebSocket/SSE endpoints.
+          <strong>✅ Real-time Events Active:</strong> This panel shows live events from your task interactions.
+          Events are published to RabbitMQ and streamed via WebSocket in real-time.
         </p>
         <div class="monitor-details">
-          <div><strong>Current Mode:</strong> localStorage simulation</div>
+          <div><strong>Current Mode:</strong> Real-time WebSocket streaming</div>
           <div><strong>Backend Events:</strong> Published to RabbitMQ exchange</div>
           <div><strong>Event Types:</strong> task.created, task.updated, task.completed</div>
-          <div><strong>Note:</strong> Backend WebSocket/SSE endpoints needed for real-time streaming</div>
+          <div><strong>WebSocket Endpoint:</strong> ws://localhost:8080/ws/events</div>
         </div>
       </div>
     </div>
@@ -141,42 +144,52 @@ export default {
       return max > 0 ? (count / max) * 100 : 0
     }
 
-    // Load real events from localStorage (temporary solution until backend provides event endpoints)
-    const loadEventsFromStorage = () => {
-      const storedEvents = localStorage.getItem('taskEvents')
-      if (storedEvents) {
-        try {
-          const parsed = JSON.parse(storedEvents)
-          events.value = parsed || []
-        } catch (error) {
-          console.error('Error loading events from storage:', error)
-          events.value = []
-        }
-      }
-    }
-
     const connectToEventStream = () => {
-      console.log('⚠️  Backend WebSocket/SSE endpoints not implemented yet. Showing events from localStorage.')
-      connected.value = true
-      loadEventsFromStorage()
-
-      // Set up storage listener to detect new events
-      const handleStorageChange = (e) => {
-        if (e.key === 'taskEvents') {
-          loadEventsFromStorage()
-        }
+      if (ws.value) {
+        ws.value.close()
       }
 
-      window.addEventListener('storage', handleStorageChange)
-
-      // Check for updates every few seconds
-      const checkForUpdates = () => {
-        if (!connected.value) return
-        loadEventsFromStorage()
-        setTimeout(checkForUpdates, 3000)
-      }
+      // Always use localhost:8080 since the backend is exposed on that port
+      const wsUrl = 'ws://localhost:8080/ws/events'
+      console.log(`🔗 Attempting to connect to: ${wsUrl}`)
       
-      setTimeout(checkForUpdates, 1000)
+      try {
+        ws.value = new WebSocket(wsUrl)
+        
+        ws.value.onopen = () => {
+          connected.value = true
+          console.log('✅ WebSocket connected to event stream')
+        }
+        
+        ws.value.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data)
+            events.value.push({
+              id: message.id || eventIdCounter++,
+              type: message.type,
+              aggregateId: message.aggregateId,
+              timestamp: new Date(message.timestamp),
+              payload: message.payload
+            })
+            console.log('📨 Received event:', message)
+          } catch (error) {
+            console.error('❌ Failed to parse WebSocket message:', error)
+          }
+        }
+        
+        ws.value.onclose = (event) => {
+          connected.value = false
+          console.log(`📡 WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`)
+        }
+        
+        ws.value.onerror = (error) => {
+          console.error('❌ WebSocket error:', error)
+          connected.value = false
+        }
+      } catch (error) {
+        console.error('❌ Failed to create WebSocket:', error)
+        connected.value = false
+      }
     }
 
     const disconnectFromEventStream = () => {
@@ -197,8 +210,14 @@ export default {
 
     const clearEvents = () => {
       events.value = []
-      localStorage.removeItem('taskEvents')
-      console.log('🗑️ Events cleared from localStorage')
+    }
+
+    const forceReconnect = () => {
+      console.log('🔄 Force reconnecting WebSocket...')
+      disconnectFromEventStream()
+      setTimeout(() => {
+        connectToEventStream()
+      }, 1000)
     }
 
     const formatTime = (date) => {
@@ -206,8 +225,11 @@ export default {
     }
 
     onMounted(() => {
-      // Auto-connect on mount
-      connectToEventStream()
+      // Auto-connect on mount with a small delay
+      console.log('📡 Events page mounted, attempting to connect to WebSocket...')
+      setTimeout(() => {
+        connectToEventStream()
+      }, 1000)
     })
 
     onUnmounted(() => {
@@ -221,6 +243,7 @@ export default {
       eventTypeDistribution,
       toggleConnection,
       clearEvents,
+      forceReconnect,
       formatTime,
       getProgressWidth
     }
@@ -254,6 +277,20 @@ export default {
 
 .btn-secondary:hover {
   background: #545b62;
+}
+
+.btn-warning {
+  background: #ffc107;
+  color: #212529;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.btn-warning:hover {
+  background: #e0a800;
 }
 
 .events-list {

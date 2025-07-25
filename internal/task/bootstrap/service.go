@@ -88,7 +88,7 @@ func (s *Service) initProviders(ctx context.Context) (*Providers, error) {
 // setupHTTPServer configura el servidor HTTP con todos los handlers
 func (s *Service) setupHTTPServer() error {
 	// Crear servidor HTTP con todas las dependencias inyectadas
-	httpServer := taskhttp.NewServer(s.providers.CommandBus)
+	httpServer := taskhttp.NewServer(s.providers.CommandBus, s.providers.TaskRepository, s.providers.EventBus)
 
 	// Configurar servidor HTTP con timeouts apropiados
 	s.server = &http.Server{
@@ -112,7 +112,11 @@ func (s *Service) serve(ctx context.Context) error {
 		fmt.Printf("🚀 HTTP server starting on %s\n", s.config.Server.Address)
 		fmt.Printf("📋 Available endpoints:\n")
 		fmt.Printf("   - GET  /health\n")
+		fmt.Printf("   - GET  /ws/events (WebSocket)\n")
+		fmt.Printf("   - GET  /api/v1/tasks\n")
 		fmt.Printf("   - POST /api/v1/tasks\n")
+		fmt.Printf("   - GET  /api/v1/tasks/:id\n")
+		fmt.Printf("   - PUT  /api/v1/tasks/:id\n")
 
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- fmt.Errorf("HTTP server failed: %w", err)
